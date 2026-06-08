@@ -1,117 +1,117 @@
 # testLLM
 
-Detect whether an LLM API provider is actually serving the model it claims.
+检测 LLM API 中转商是否真正提供了它声称的模型。
 
-Some API proxies or resellers advertise access to expensive models (e.g. GPT-4o) while secretly routing requests to cheaper alternatives. **testLLM** runs a suite of probes against the target API — testing behavioral, metadata, and capability signals — then aggregates the results into a weighted verdict.
+部分 API 中转商或代理商声称提供高端模型（如 GPT-4o），实际上却偷偷将请求转发到更廉价的替代模型。**testLLM** 通过运行一系列探测探针，从行为、元数据、能力等多个维度对目标 API 进行测试，最终汇总为加权评分和判定结论。
 
-## How It Works
+## 工作原理
 
-testLLM runs 11 detection probes, each producing a confidence score (0–1) that the claimed model is being served. Results are aggregated with configurable weights into a final verdict:
+testLLM 运行 11 个探测探针，每个探针产出一个置信度分数（0–1），表示目标 API 提供的是所声称模型的概率。结果按可配置的权重聚合，最终给出判定结论：
 
-| Verdict | Meaning |
-|---------|---------|
-| LIKELY CORRECT | High confidence the claimed model is real |
-| UNCERTAIN | Mixed signals, needs manual review |
-| HIGH RISK | Strong evidence the provider is NOT serving the claimed model |
+| 判定结论 | 含义 |
+|---------|------|
+| LIKELY CORRECT | 高置信度，声称的模型很可能是真实的 |
+| UNCERTAIN | 信号不一致，需要人工审查 |
+| HIGH RISK | 强烈证据表明提供商**没有**提供所声称的模型 |
 
-### Probes
+### 探测探针
 
-| Probe | Weight | What It Tests |
-|-------|--------|---------------|
-| `system_prompt_leak` | 0.35 | Extracts real model identity from system prompt via Responses API |
-| `logprobs` | 0.25 | Analyzes token probability distributions (model-specific) |
-| `reasoning` | 0.20 | Tests math, logic, and coding against known answers |
-| `context_window` | 0.20 | Binary search to estimate actual context window (expensive) |
-| `knowledge_cutoff` | 0.15 | Boundary knowledge questions against reference data |
-| `multimodal` | 0.10 | Vision/audio capability checks |
-| `special_triggers` | 0.10 | Known model-specific behavioral triggers |
-| `self_report` | 0.10 | Asks the model to identify itself (easily spoofed) |
-| `api_metadata` | 0.05 | Checks `model` field in API responses |
-| `api_models` | 0.05 | Queries `/models` endpoint |
-| `style_fingerprint` | 0.05 | Analyzes output formatting patterns |
+| 探针 | 权重 | 测试内容 |
+|------|------|---------|
+| `system_prompt_leak` | 0.35 | 通过 Responses API 提取系统提示词中的真实模型身份 |
+| `logprobs` | 0.25 | 分析 token 概率分布（模型特有） |
+| `reasoning` | 0.20 | 测试数学、逻辑和编程能力，与已知答案对比 |
+| `context_window` | 0.20 | 二分搜索估算实际上下文窗口大小（消耗较大） |
+| `knowledge_cutoff` | 0.15 | 知识边界问题，与参考数据对比 |
+| `multimodal` | 0.10 | 视觉/音频能力检测 |
+| `special_triggers` | 0.10 | 已知的模型特定行为触发器 |
+| `self_report` | 0.10 | 让模型自我报告身份（容易被伪造） |
+| `api_metadata` | 0.05 | 检查 API 响应中的 `model` 字段 |
+| `api_models` | 0.05 | 查询 `/models` 端点 |
+| `style_fingerprint` | 0.05 | 分析输出格式特征 |
 
-## Requirements
+## 环境要求
 
 - Python 3.10+
 - `httpx`
 - `pyyaml`
 - `rich`
 
-## Install
+## 安装
 
 ```bash
 pip install httpx pyyaml rich
 ```
 
-## Usage
+## 使用方法
 
 ```bash
-# Basic usage
+# 基本用法
 python detect.py --base-url https://api.openai.com --api-key sk-xxx --model gpt-4o
 
-# Test a proxy
+# 测试中转商
 python detect.py --base-url https://proxy.example.com/v1 --api-key sk-xxx --model gpt-4o
 
-# Run specific probes only
+# 只运行指定探针
 python detect.py --base-url https://api.openai.com --api-key sk-xxx --model gpt-4o \
   --probes self_report,api_metadata,reasoning
 
-# Skip expensive probes (e.g. context_window)
+# 跳过消耗较大的探针（如 context_window）
 python detect.py --base-url https://api.openai.com --api-key sk-xxx --model gpt-4o \
   --skip-expensive
 
-# Force wire protocol (default: auto-detect)
+# 强制指定协议（默认自动检测）
 python detect.py --base-url https://api.openai.com --api-key sk-xxx --model gpt-4o \
   --wire-api chat_completions
 
-# List available reference models
+# 列出可用的参考模型
 python detect.py --list-models
 ```
 
-### CLI Options
+### 命令行参数
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--base-url` | API endpoint URL | (required) |
-| `--api-key` | API key for authentication | (required) |
-| `--model` | Claimed model name (e.g. `gpt-4o`) | (required) |
-| `--probes` | Comma-separated probe names to run | all |
-| `--skip-expensive` | Skip expensive probes like `context_window` | off |
-| `--timeout` | API timeout in seconds | 60 |
-| `--wire-api` | Force `chat_completions` or `responses` | auto-detect |
-| `--list-models` | List reference models and exit | - |
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--base-url` | API 端点 URL | （必填） |
+| `--api-key` | API 密钥 | （必填） |
+| `--model` | 声称的模型名称（如 `gpt-4o`） | （必填） |
+| `--probes` | 逗号分隔的探针名称，只运行指定探针 | 全部 |
+| `--skip-expensive` | 跳过消耗较大的探针（如 `context_window`） | 关闭 |
+| `--timeout` | API 超时时间（秒） | 60 |
+| `--wire-api` | 强制指定 `chat_completions` 或 `responses` | 自动检测 |
+| `--list-models` | 列出参考模型后退出 | - |
 
-## Project Structure
+## 项目结构
 
 ```
-detect.py                    # CLI entry point
-client.py                    # Async HTTP client (httpx)
-config.py                    # Configuration & probe weights
-scoring.py                   # Weighted aggregation & verdict logic
-report.py                    # Rich terminal output
+detect.py                    # 命令行入口
+client.py                    # 异步 HTTP 客户端（httpx）
+config.py                    # 配置与探针权重
+scoring.py                   # 加权聚合与判定逻辑
+report.py                    # 终端报告输出（rich）
 probes/
-  base.py                    # BaseProbe abstract class & registry
-  self_report.py             # Model self-identification
-  api_metadata.py            # API response metadata check
-  api_models.py              # /models endpoint probe
-  system_prompt_leak.py      # System prompt extraction
-  knowledge_cutoff.py        # Knowledge boundary questions
-  reasoning.py               # Math/logic/coding tests
-  style_fingerprint.py       # Output format analysis
-  context_window.py          # Context window estimation
-  logprobs.py                # Token probability analysis
-  multimodal.py              # Vision/audio capability test
-  special_triggers.py        # Model-specific triggers
+  base.py                    # BaseProbe 抽象类与注册机制
+  self_report.py             # 模型自我身份报告
+  api_metadata.py            # API 响应元数据检查
+  api_models.py              # /models 端点探测
+  system_prompt_leak.py      # 系统提示词提取
+  knowledge_cutoff.py        # 知识边界问题
+  reasoning.py               # 数学/逻辑/编程测试
+  style_fingerprint.py       # 输出格式分析
+  context_window.py          # 上下文窗口估算
+  logprobs.py                # token 概率分析
+  multimodal.py              # 视觉/音频能力测试
+  special_triggers.py        # 模型特定触发器
 reference/
-  loader.py                  # YAML reference file loader
+  loader.py                  # YAML 参考文件加载器
   models/
-    gpt-4o.yaml              # GPT-4o reference profile
-    gpt-5.5.yaml             # GPT-5.5 reference profile
+    gpt-4o.yaml              # GPT-4o 参考配置
+    gpt-5.5.yaml             # GPT-5.5 参考配置
 ```
 
-## Adding Reference Models
+## 添加参考模型
 
-Create a YAML file in `reference/models/` (e.g. `claude-3-opus.yaml`):
+在 `reference/models/` 下创建 YAML 文件（如 `claude-3-opus.yaml`）：
 
 ```yaml
 knowledge_cutoff: "2024-04"
@@ -128,13 +128,13 @@ multimodal:
   audio: false
 ```
 
-## Adding Probes
+## 添加自定义探针
 
-1. Create a new file in `probes/` (e.g. `my_probe.py`).
-2. Define a class extending `BaseProbe`, implement `async def run(self, client, config) -> ProbeResult`.
-3. Decorate with `@register_probe`.
-4. Add the import to `probes/__init__.py`.
+1. 在 `probes/` 下创建新文件（如 `my_probe.py`）。
+2. 定义一个继承 `BaseProbe` 的类，实现 `async def run(self, client, config) -> ProbeResult`。
+3. 使用 `@register_probe` 装饰器注册。
+4. 在 `probes/__init__.py` 中添加 import。
 
-## License
+## 许可证
 
 MIT
